@@ -140,15 +140,9 @@ fn main_loop(
                     return Ok(());
                 }
                 let mut request = ReqMessage { req };
-                if let response = handle_hover(&mut world, &mut request) {
-                    handle_request(connection, response);
-                }
-                if let response = handle_completion(&mut request) {
-                    handle_request(connection, response);
-                }
-                if let response = handle_goto(&mut world, &mut request) {
-                    handle_request(connection, response);
-                }
+                handle_request(connection, handle_hover(&mut world, &mut request));
+                handle_request(connection, handle_completion(&mut request));
+                handle_request(connection, handle_goto(&mut world, &mut request));
             }
             Message::Response(_resp) => {}
             Message::Notification(_not) => {}
