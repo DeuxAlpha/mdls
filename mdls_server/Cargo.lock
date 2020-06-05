@@ -16,6 +16,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85bb70cc08ec97ca5450e6eba421deeea5f172c0fc61f78b5357b2a8e8be195f"
+
+[[package]]
 name = "arrayvec"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -253,6 +259,7 @@ checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 name = "mdls"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "crossbeam-channel",
  "flexi_logger",
  "log",
@@ -271,6 +278,7 @@ dependencies = [
 name = "mdls_server"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "crossbeam-channel",
  "flexi_logger",
  "log",

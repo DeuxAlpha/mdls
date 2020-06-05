@@ -82,4 +82,9 @@ mod tests {
         }
         println!("{:?}", types)
     }
+    #[test]
+    fn method_translate() {
+        let _ron = type_annotations::parse_method_ron();
+        
+    }
 }

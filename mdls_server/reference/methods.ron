@@ -839,14 +839,14 @@ Method (
 			datatype: Some([Group]),
 			contains: Some([Ship]),
 		),
-		// Output (
-		// 	attr: "dock",
-		// 	datatype: Some([Dockingbay]),
-		// ),
-		// Output (
-		// 	attr: "macro",
-		// 	datatype: Some([Macro]),
-		// ),
+		Output (
+			attr: "dock",
+			datatype: Some([Dockingbay]),
+		),
+		Output (
+			attr: "macro",
+			datatype: Some([Macro]),
+		),
 	],
 ),
 Method (

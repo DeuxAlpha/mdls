@@ -397,3 +397,10 @@ pub enum Datatypes {
     Namespace,
     Unknown,
 }
+
+impl Default for Datatypes {
+    fn default() -> Self {
+        Datatypes::Unknown
+    }
+    
+}

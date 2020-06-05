@@ -1,10 +1,11 @@
+use anyhow::Result;
+use log::info;
 use specs::prelude::*;
 use std::error::Error;
-
-use log::info;
 // use lsp_types::notification::DidChangeTextDocument;
 use lsp_types::request::*;
 use lsp_types::*;
+
 // use lsp_types::{
 //     CodeActionOptions, CodeActionProviderCapability, CodeLensOptions, CompletionItem,
 //     CompletionOptions, CompletionResponse, DocumentOnTypeFormattingOptions,
@@ -15,10 +16,39 @@ use lsp_types::*;
 // };
 
 use lsp_server::{Connection, Message, Request, RequestId, Response};
-
-use mdls_server::*;
 use lsp_types::RenameProviderCapability::Options;
+use mdls_server::*;
+// #[derive(Debug)]
+// enum MdlsServerError {
+//     Response(u32, u32),
+//     Ignore(u32, u32),
+//     Hover(u32, u32),
+//     Complete(u32, u32),
+//     Specs(u32, u32),
+//     GoToDef(u32, u32),
+// }
+// impl MdlsServerError {
+//     fn write_error(&self) {
+//         match self {
+//             MdlsServerError::Response(l, c) => {
+//                 info!("Response failed here - line: {} col: {}", l, c)
+//             }
+//             MdlsServerError::Ignore(l, c) => {
+//                 if VERBOSE {
+//                     info!("Ignored failed line: {} col: {}", l, c)
+//                 }
+//             }
+//             MdlsServerError::Hover(l, c) => info!("Hover failed here - line: {} col: {}", l, c),
+//             MdlsServerError::Complete(l, c) => {
+//                 info!("Complete failed here - line: {} col: {}", l, c)
+//             }
+//             MdlsServerError::Specs(l, c) => info!("Specs failed here - line: {} col: {}", l, c),
+//             MdlsServerError::GoToDef(l, c) => info!("GoToDef failed here - line: {} col: {}", l, c),
+//         }
+//     }
+// }
 
+// const VERBOSE: bool = true;
 
 fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
     // Set up logging. Because `stdio_transport` gets a lock on stdout and stdin, we must have
@@ -140,9 +170,15 @@ fn main_loop(
                     return Ok(());
                 }
                 let mut request = ReqMessage { req };
-                handle_request(connection, handle_hover(&mut world, &mut request));
-                handle_request(connection, handle_completion(&mut request));
-                handle_request(connection, handle_goto(&mut world, &mut request));
+                if let Some(resp) = handle_hover(&mut world, &mut request) {
+                    handle_request(connection, resp);
+                }
+                if let Some(resp) = handle_completion(&mut request) {
+                    handle_request(connection, resp);
+                }
+                if let Some(resp) = handle_goto(&mut world, &mut request) {
+                    handle_request(connection, resp);
+                }
             }
             Message::Response(_resp) => {}
             Message::Notification(_not) => {}
@@ -151,17 +187,13 @@ fn main_loop(
     Ok(())
 }
 
-fn handle_request(connection: &Connection, response: Option<Response>) {
-    if response.is_some() {
-        connection.sender.send(Message::Response(response.unwrap()));
-    }
-}
-
 fn build_world(params: InitializeParams) -> World {
     info!("starting example main loop");
     let method_ano = type_annotations::parse_method_ron();
     let event_ano = type_annotations::parse_event_ron();
-    let script_properties = scriptproperties::ScriptProperties::new(include_str!("../../reference/scriptproperties.xml"));
+    let script_properties = scriptproperties::ScriptProperties::new(include_str!(
+        "../../reference/scriptproperties.xml"
+    ));
     // let mut world = generate_world(_params.root_uri.clone());
     let mut world = data_store::new_generate_world(params.root_uri.clone());
     world.insert(method_ano);
@@ -181,8 +213,26 @@ fn build_world(params: InitializeParams) -> World {
         .with(systems::AddVarsToCues, "AddVarsToCues", &[])
         .with(systems::AddNodesToCues, "AddNodesToCues", &[])
         .with(systems::AddCuesToScript, "AddCuesToScript", &[])
-        .with(systems::ParseExpressions, "ParseExpressions", &["AddCuesToScript", "AddNodesToCues", "AddVarsToNodes", "AddVarsToCues"])
-        .with(systems::PrintGraph, "PrintGraph", &["AddCuesToScript", "AddNodesToCues", "AddVarsToNodes", "AddVarsToCues"])
+        .with(
+            systems::ParseExpressions,
+            "ParseExpressions",
+            &[
+                "AddCuesToScript",
+                "AddNodesToCues",
+                "AddVarsToNodes",
+                "AddVarsToCues",
+            ],
+        )
+        .with(
+            systems::PrintGraph,
+            "PrintGraph",
+            &[
+                "AddCuesToScript",
+                "AddNodesToCues",
+                "AddVarsToNodes",
+                "AddVarsToCues",
+            ],
+        )
         .build();
 
     dispatcher.dispatch(&mut world);
@@ -190,43 +240,46 @@ fn build_world(params: InitializeParams) -> World {
 }
 
 fn handle_hover(world: &mut World, request: &mut ReqMessage) -> Option<Response> {
-    let cast_result = request.cast::<HoverRequest>();
-    if cast_result.is_err() {
-        return Option::None;
+    if let Ok((id, param)) = request.cast::<HoverRequest>() {
+        return Some(hover::new_hover_resp(id, param, world));
     }
-    let (id, params) = cast_result.unwrap();
-    Option::from(hover::new_hover_resp(id, params, world))
+    None
 }
 
 fn handle_completion(request: &mut ReqMessage) -> Option<Response> {
-    let cast_result = request.cast::<Completion>();
-    if cast_result.is_err() {
-        return Option::None;
+    if let Ok((id, params)) = request.cast::<Completion>() {
+        if let Ok(json) = serde_json::to_value(&CompletionResponse::Array(
+            completion_parser::simple_complete(params),
+        )) {
+            return Some(Response {
+                id,
+                result: Some(json),
+                error: None,
+            });
+        }
     }
-    let (id, params) = cast_result.unwrap();
-    let result = serde_json::to_value(&CompletionResponse::Array(completion_parser::simple_complete(params))).unwrap();
-    Option::from(Response {
-        id,
-        result: Some(result),
-        error: None,
-    })
+    None
 }
 
 fn handle_goto(world: &mut World, request: &mut ReqMessage) -> Option<Response> {
-    let cast_result = request.cast::<GotoDefinition>();
-    if cast_result.is_err() {
-        return Option::None;
+    if let Ok((id, params)) = request.cast::<GotoDefinition>() {
+        if let Ok(json) = serde_json::to_value(lsp_types::GotoDefinitionResponse::Array(
+            definition_parser::simple_definition(params, world),
+        )) {
+            return Some(Response {
+                id,
+                result: Some(json),
+                error: None,
+            });
+        }
     }
-    let (id, params) = cast_result.unwrap();
-    let result = Some(lsp_types::GotoDefinitionResponse::Array(definition_parser::simple_definition(
-        params, world,
-    )));
-    let result = serde_json::to_value(&result).unwrap();
-    Option::from(Response {
-        id,
-        result: Some(result),
-        error: None,
-    })
+    None
+}
+
+fn handle_request(connection: &Connection, response: Response) {
+    if let Err(err) = connection.sender.send(Message::Response(response)) {
+        // MdlsServerError::Response(line!(), column!());
+    }
 }
 
 #[derive(Clone)]
@@ -236,9 +289,9 @@ struct ReqMessage {
 
 impl ReqMessage {
     fn cast<R>(&mut self) -> Result<(RequestId, R::Params), Request>
-        where
-            R: lsp_types::request::Request,
-            R::Params: serde::de::DeserializeOwned,
+    where
+        R: lsp_types::request::Request,
+        R::Params: serde::de::DeserializeOwned,
     {
         self.clone().req.extract(R::METHOD)
     }

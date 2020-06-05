@@ -54,3 +54,37 @@ pub fn parse_event_ron() -> EventList {
     };
     events
 }
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct MethodsParsed {
+    pub methods: Vec<Method>,
+}
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct MethodParsed {
+    pub name: String,
+    pub description: String,
+    pub values: (
+        Option<VarType>,
+        Option<VarType>,
+        Option<VarType>,
+        Option<VarType>,
+        Option<VarType>,
+    ),
+}
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct VarType {
+    pub multiple: Multiple,
+    pub attr: String,
+    pub datatype: Datatypes,
+}
+#[derive(Debug, Clone, Deserialize)]
+pub enum Multiple {
+    List,
+    Group,
+    Single,
+}
+impl Default for Multiple {
+    fn default() -> Self {
+        Multiple::Single
+    }
+}
